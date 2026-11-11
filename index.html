@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Classroom</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --text: #1b2430;
+    --muted: #5d6877;
+    --line: #dde1e7;
+    --accent: #1f4e8c;
+    --accent-dark: #173b6b;
+    --ok: #1d7a4a;
+    --err: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--line);
+  }
+  .brand { font-weight: 600; font-size: 18px; letter-spacing: 0.2px; }
+  main { max-width: 920px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 26px; margin: 0 0 6px; font-weight: 600; }
+  h2 { font-size: 18px; margin: 0 0 10px; font-weight: 600; }
+  p.lead { color: var(--muted); margin: 0 0 24px; max-width: 60ch; }
+  .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .role {
+    text-align: left; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 6px; padding: 20px; cursor: pointer; font: inherit; color: inherit;
+  }
+  .role:hover { border-color: var(--accent); }
+  .role strong { display: block; font-size: 17px; margin-bottom: 4px; }
+  .role span { color: var(--muted); font-size: 14px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 24px; }
+  .panel + .panel { margin-top: 16px; }
+  label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
+  input[type=text] {
+    width: 100%; max-width: 360px; padding: 10px 12px; font: inherit;
+    border: 1px solid #b9c0ca; border-radius: 4px; background: #fff; color: var(--text);
+  }
+  input[type=text]:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .code-input { letter-spacing: 6px; font-size: 20px; max-width: 220px !important; }
+  button.btn {
+    font: inherit; font-weight: 600; padding: 10px 18px; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  }
+  button.btn:hover { background: var(--accent-dark); }
+  button.btn.secondary { background: #fff; color: var(--accent); }
+  button.btn.secondary:hover { background: #eef3f9; }
+  button.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 18px; }
+  .link { background: none; border: none; color: var(--accent); cursor: pointer; font: inherit; padding: 0; }
+  .link:hover { text-decoration: underline; }
+  .error { color: var(--err); margin-top: 12px; font-size: 14px; min-height: 20px; }
+  .code {
+    font-size: 44px; font-weight: 700; letter-spacing: 10px; color: var(--accent);
+    font-variant-numeric: tabular-nums; margin: 6px 0 4px;
+  }
+  .meta { color: var(--muted); font-size: 14px; }
+  .status { display: inline-block; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 3px; background: #e9eef5; color: var(--accent); }
+  .status.live { background: #e3f2ea; color: var(--ok); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  .stage { background: #fff; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .stage img { display: block; width: 100%; height: auto; }
+  .stage .cap { padding: 14px 18px; border-top: 1px solid var(--line); }
+  .stage .cap strong { display: block; font-size: 16px; }
+  .thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  .thumb { padding: 0; border: 2px solid var(--line); border-radius: 6px; overflow: hidden; background: #fff; cursor: pointer; font: inherit; }
+  .thumb img { display: block; width: 100%; height: auto; }
+  .thumb.active { border-color: var(--accent); }
+  .thumb span { display: block; padding: 6px 8px; font-size: 13px; text-align: left; color: var(--text); }
+  .waiting { text-align: center; padding: 56px 20px; }
+  .head-row { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Live Classroom</div>
+  <button class="link" id="leave" hidden>Leave</button>
+</header>
+<main id="app"></main>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+/* ---------- Slides ----------
+   Three images shown in the class. To use your own pictures, replace each
+   "src" with a file path (for example "/images/one.jpg") or a full URL. */
+function art(kind, title) {
+  const shapes = {
+    1: '<circle cx="250" cy="260" r="90" fill="#1f4e8c" opacity=".9"/><circle cx="400" cy="260" r="90" fill="#4f81bd" opacity=".85"/><circle cx="550" cy="260" r="90" fill="#9db9d9" opacity=".9"/>',
+    2: '<rect x="170" y="300" width="90" height="90" fill="#9db9d9"/><rect x="290" y="240" width="90" height="150" fill="#4f81bd"/><rect x="410" y="180" width="90" height="210" fill="#1f4e8c"/><rect x="530" y="120" width="90" height="270" fill="#173b6b"/>',
+    3: '<path d="M170 380 L300 260 L400 330 L520 190 L630 260" fill="none" stroke="#1f4e8c" stroke-width="10" stroke-linejoin="round"/><circle cx="300" cy="260" r="14" fill="#1f4e8c"/><circle cx="400" cy="330" r="14" fill="#1f4e8c"/><circle cx="520" cy="190" r="14" fill="#1f4e8c"/><circle cx="630" cy="260" r="14" fill="#1f4e8c"/>'
+  };
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">' +
+    '<rect width="800" height="450" fill="#f2f5f9"/><rect x="0" y="0" width="800" height="8" fill="#1f4e8c"/>' +
+    '<text x="60" y="90" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="600" fill="#1b2430">' + title + '</text>' +
+    shapes[kind] + '</svg>';
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+const SLIDES = [
+  { title: 'Image 1: Foundations', caption: 'Start with the core ideas and shared vocabulary.', src: art(1, 'Foundations') },
+  { title: 'Image 2: Building Up', caption: 'Each concept builds on the one before it.', src: art(2, 'Building Up') },
+  { title: 'Image 3: Putting It Together', caption: 'Connect the pieces and review the full picture.', src: art(3, 'Putting It Together') }
+];
+
+/* ---------- Helpers ---------- */
+const PREFIX = 'liveclass-room-';
+const app = document.getElementById('app');
+const leaveBtn = document.getElementById('leave');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+leaveBtn.onclick = () => location.reload();
+const show = html => { app.innerHTML = html; };
+
+/* ---------- Home ---------- */
+function home() {
+  leaveBtn.hidden = true;
+  show(`
+    <h1>Welcome</h1>
+    <p class="lead">Choose how you want to take part. An Admin creates a room, a Mentor leads the class, and Students join with a 6-digit class code.</p>
+    <div class="roles">
+      <button class="role" data-r="admin"><strong>Admin</strong><span>Create a room and share its class code.</span></button>
+      <button class="role" data-r="mentor"><strong>Mentor</strong><span>Start the class and change the image for everyone.</span></button>
+      <button class="role" data-r="student"><strong>Student</strong><span>Join a class and follow along live.</span></button>
+    </div>`);
+  app.querySelectorAll('.role').forEach(b => b.onclick = () => {
+    b.dataset.r === 'admin' ? adminView() : joinForm(b.dataset.r);
+  });
+}
+
+/* ---------- Admin: creates the room and relays state ---------- */
+const room = { code: null, peer: null, state: { started: false, index: 0 }, members: new Map() };
+
+function adminView() {
+  leaveBtn.hidden = false;
+  show(`
+    <h1>Admin</h1>
+    <p class="lead">Create a room to get a 6-digit class code. Keep this page open while the class is running.</p>
+    <div class="panel"><button class="btn" id="create">Create room</button><div class="error" id="err"></div></div>`);
+  document.getElementById('create').onclick = createRoom;
+}
+
+function createRoom() {
+  const err = document.getElementById('err');
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  err.textContent = '';
+  const peer = new Peer(PREFIX + code);
+  peer.on('open', () => { room.code = code; room.peer = peer; renderAdmin(); });
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id') { peer.destroy(); createRoom(); }
+    else if (err) err.textContent = 'Could not create the room (' + e.type + '). Check your connection and try again.';
+  });
+  peer.on('connection', conn => {
+    conn.on('data', msg => handleMessage(conn, msg));
+    conn.on('close', () => { room.members.delete(conn); broadcast(); });
+    conn.on('error', () => { room.members.delete(conn); broadcast(); });
+  });
+}
+
+function roster() {
+  const list = [...room.members.values()];
+  return {
+    mentors: list.filter(m => m.role === 'mentor').map(m => m.name),
+    students: list.filter(m => m.role === 'student').map(m => m.name)
+  };
+}
+
+function handleMessage(conn, msg) {
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.type === 'join' && (msg.role === 'mentor' || msg.role === 'student')) {
+    room.members.set(conn, { role: msg.role, name: String(msg.name || 'Guest').slice(0, 40) });
+  }
+  const m = room.members.get(conn);
+  if (!m) return;
+  if (m.role === 'mentor') {
+    if (msg.type === 'start') room.state.started = true;
+    if (msg.type === 'set' && room.state.started && Number.isInteger(msg.index) && msg.index >= 0 && msg.index < SLIDES.length) {
+      room.state.index = msg.index;
+    }
+  }
+  broadcast();
+}
+
+function broadcast() {
+  const payload = { type: 'state', state: room.state, roster: roster() };
+  room.members.forEach((_, conn) => { if (conn.open) conn.send(payload); });
+  renderAdmin();
+}
+
+function renderAdmin() {
+  if (!room.code) return;
+  const r = roster();
+  const rows = [...r.mentors.map(n => ['Mentor', n]), ...r.students.map(n => ['Student', n])]
+    .map(x => `<tr><td>${x[0]}</td><td>${esc(x[1])}</td></tr>`).join('') || '<tr><td colspan="2" class="meta">No one has joined yet.</td></tr>';
+  show(`
+    <h1>Admin</h1>
+    <p class="lead">Share this code with your mentor and students. Keep this page open while the class is running.</p>
+    <div class="panel">
+      <div class="meta">Class code</div>
+      <div class="code">${room.code}</div>
+      <span class="status ${room.state.started ? 'live' : ''}">${room.state.started ? 'Class in progress: image ' + (room.state.index + 1) + ' of ' + SLIDES.length : 'Waiting for mentor to start'}</span>
+    </div>
+    <div class="panel">
+      <h2>Participants (${r.mentors.length + r.students.length})</h2>
+      <table><thead><tr><th>Role</th><th>Name</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>`);
+}
+
+/* ---------- Mentor / Student: join a room ---------- */
+function joinForm(role) {
+  leaveBtn.hidden = false;
+  const label = role === 'mentor' ? 'Mentor' : 'Student';
+  show(`
+    <h1>${label}</h1>
+    <p class="lead">${role === 'mentor' ? 'Enter the class code from your Admin to lead the class.' : 'Enter the 6-digit class code from your mentor to join.'}</p>
+    <div class="panel">
+      <label for="name">Your name</label>
+      <input type="text" id="name" maxlength="40" autocomplete="name">
+      <label for="code">Class code</label>
+      <input type="text" id="code" class="code-input" maxlength="6" inputmode="numeric" autocomplete="off">
+      <div class="row"><button class="btn" id="go">Join class</button></div>
+      <div class="error" id="err" role="alert"></div>
+    </div>`);
+  const codeEl = document.getElementById('code');
+  codeEl.oninput = () => { codeEl.value = codeEl.value.replace(/\D/g, ''); };
+  document.getElementById('go').onclick = () => {
+    const name = document.getElementById('name').value.trim();
+    const code = codeEl.value;
+    const err = document.getElementById('err');
+    if (!name) { err.textContent = 'Enter your name.'; return; }
+    if (code.length !== 6) { err.textContent = 'The class code must be 6 digits.'; return; }
+    err.textContent = 'Connecting...';
+    connect(role, name, code);
+  };
+}
+
+function connect(role, name, code) {
+  const err = () => document.getElementById('err');
+  const fail = text => { if (err()) err().textContent = text; };
+  const peer = new Peer();
+  let joined = false;
+  peer.on('error', e => {
+    if (joined) return;
+    fail(e.type === 'peer-unavailable'
+      ? 'Room not found. Check the code and make sure the Admin has the room open.'
+      : 'Connection problem (' + e.type + '). Try again.');
+  });
+  peer.on('open', () => {
+    const conn = peer.connect(PREFIX + code, { reliable: true });
+    const timer = setTimeout(() => { if (!joined) { fail('Could not reach the room. Try again.'); peer.destroy(); } }, 12000);
+    conn.on('open', () => { joined = true; clearTimeout(timer); conn.send({ type: 'join', role, name }); });
+    conn.on('data', msg => { if (msg && msg.type === 'state') renderClass(role, code, msg, conn); });
+    conn.on('close', () => {
+      show(`<div class="panel waiting"><h2>The room has closed</h2><p class="meta">The Admin ended the session or the connection was lost.</p><div class="row" style="justify-content:center"><button class="btn" onclick="location.reload()">Back to start</button></div></div>`);
+    });
+  });
+}
+
+/* ---------- Class view (Mentor and Student) ---------- */
+function renderClass(role, code, msg, conn) {
+  const { state, roster: r } = msg;
+  const isMentor = role === 'mentor';
+  const slide = SLIDES[state.index];
+  let body;
+
+  if (!state.started) {
+    body = isMentor
+      ? `<div class="panel waiting"><h2>Ready to begin</h2><p class="meta">${r.students.length} student${r.students.length === 1 ? '' : 's'} in the room.</p>
+         <div class="row" style="justify-content:center"><button class="btn" id="start">Start class</button></div></div>`
+      : `<div class="panel waiting"><h2>Waiting for the mentor to start</h2><p class="meta">The first image will appear here as soon as the class begins.</p></div>`;
+  } else {
+    const thumbs = isMentor ? `<div class="thumbs">${SLIDES.map((s, i) =>
+      `<button class="thumb ${i === state.index ? 'active' : ''}" data-i="${i}" aria-label="Show image ${i + 1}"><img src="${s.src}" alt=""><span>Image ${i + 1}</span></button>`).join('')}</div>` : '';
+    const controls = isMentor ? `<div class="row">
+        <button class="btn secondary" id="prev" ${state.index === 0 ? 'disabled' : ''}>Previous image</button>
+        <button class="btn" id="next" ${state.index === SLIDES.length - 1 ? 'disabled' : ''}>Next image</button></div>` : '';
+    body = `<div class="stage"><img src="${slide.src}" alt="${esc(slide.title)}">
+        <div class="cap"><strong>${esc(slide.title)}</strong><span class="meta">${esc(slide.caption)}</span></div></div>${controls}${thumbs}`;
+  }
+
+  show(`
+    <div class="head-row">
+      <div><h1>${isMentor ? 'Mentor view' : 'Class'}</h1>
+      <span class="meta">Room ${code} &middot; ${r.students.length} student${r.students.length === 1 ? '' : 's'} connected</span></div>
+      <span class="status ${state.started ? 'live' : ''}">${state.started ? 'Live: image ' + (state.index + 1) + ' of ' + SLIDES.length : 'Not started'}</span>
+    </div>${body}`);
+
+  if (isMentor) {
+    const $ = id => document.getElementById(id);
+    if ($('start')) $('start').onclick = () => conn.send({ type: 'start' });
+    if ($('prev')) $('prev').onclick = () => conn.send({ type: 'set', index: state.index - 1 });
+    if ($('next')) $('next').onclick = () => conn.send({ type: 'set', index: state.index + 1 });
+    app.querySelectorAll('.thumb').forEach(t => t.onclick = () => conn.send({ type: 'set', index: Number(t.dataset.i) }));
+  }
+}
+
+home();
+</script>
+</body>
+</html>
